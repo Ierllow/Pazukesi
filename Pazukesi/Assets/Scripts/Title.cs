@@ -1,12 +1,13 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class Title : MonoBehaviour
+namespace Pazukesi.Title
 {
-    public void OnTapStart()
+    public class Title : MonoBehaviour
     {
-        SceneManager.LoadScene("Main");
+        public void OnTapStart()
+        {
+            SceneManager.LoadSceneAsync("Main");
+        }
     }
 }

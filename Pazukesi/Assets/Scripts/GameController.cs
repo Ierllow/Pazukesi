@@ -1,217 +1,188 @@
-﻿using System.Collections;
+﻿using DG.Tweening;
+using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using TMPro;
-using DG.Tweening;
 using System.Linq;
-using UnityEngine.UI;
+using TMPro;
+using UnityEngine;
 using UnityEngine.SceneManagement;
-using System.Threading;
+using UnityEngine.UI;
 
-public class GameController : MonoBehaviour
+namespace Pazukesi.Game
 {
-    [SerializeField] private BallGenerator ballGenerator;
-    [SerializeField] private TextMeshProUGUI scoreText;
-    [SerializeField] private TextMeshProUGUI restTextText;
-    [SerializeField] private TextMeshProUGUI highScoreText;
-    [SerializeField] private GameObject gameOverText;
-    [SerializeField] private GameObject finishButton;
-    [SerializeField] private Button ExchangeButton;
-    [SerializeField] private GameObject pointEffectPrefab;
-
-    private List<Ball> removeBalls = new List<Ball>();
-
-    private Ball currentDraggingBall;
-    private bool isDragging;
-    private int currentScore = 0;
-
-    private bool isGameOver = false;
-
-    private readonly int firstCreateBallNum = 50;
-
-    private void Awake()
+    public class GameController : MonoBehaviour
     {
-        finishButton.SetActive(false);
-        gameOverText.SetActive(false);
-    }
+        [SerializeField] private BallGenerator ballGenerator;
+        [SerializeField] private TextMeshProUGUI scoreText;
+        [SerializeField] private TextMeshProUGUI restTextText;
+        [SerializeField] private TextMeshProUGUI highScoreText;
+        [SerializeField] private GameObject gameOverRoot;
+        [SerializeField] private GameObject finishButton;
+        [SerializeField] private Button exchangeButton;
+        [SerializeField] private GameObject pointEffectPrefab;
 
-    private void Start()
-    {
-        AddScore(currentScore);
-        StartCoroutine(ballGenerator.CoCreateDropBalls(firstCreateBallNum));
-        StartCoroutine(CoCountDown());
-    }
+        private readonly List<Ball> removeBallList = new();
 
-    private void Update()
-    {
-        if (isGameOver)
+        private Ball currentDraggingBall;
+        private bool isDragging;
+        private int currentScore = 0;
+
+        private bool isGameOver = false;
+
+        private void Start()
         {
-            return;
+            StartCoroutine(ballGenerator.CoCreateDropBalls(50, () => StartCoroutine(CoEnableInteractable())));
+            StartCoroutine(CoCountDown());
         }
-        if (Input.GetMouseButtonDown(0))
-        {
-            OnDragBegin();
-        }
-        else if (Input.GetMouseButtonUp(0))
-        {
-            OnDragEnd();
-        }
-        else if (isDragging)
-        {
-            OnDragging();
-        }
-    }
 
-    private IEnumerator CoCountDown()
-    {
-        int restTime = 60;
-        while (restTime > 0)
+        private void Update()
         {
-            yield return new WaitForSeconds(1);
-            restTime--;
-            restTextText.text = string.Format("{0}", restTime);
+            if (isGameOver) return;
+            if (Input.GetMouseButtonDown(0)) OnDragBegin();
+            else if (Input.GetMouseButtonUp(0)) OnDragEnd();
+            else if (isDragging) OnDragging();
         }
-        Debug.Log("時間切れ");
-        GameOver();
-    }
 
-    private void AddScore(int point)
-    {
-        currentScore += point;
-        scoreText.text = string.Format("Score:{0}", currentScore);
-    }
-
-    private void OnDragBegin()
-    {
-        Vector2 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        RaycastHit2D hit = Physics2D.Raycast(mousePosition, Vector2.zero);
-        if (hit && hit.collider.GetComponent<Ball>())
+        private IEnumerator CoEnableInteractable()
         {
-            Ball ball = hit.collider.GetComponent<Ball>();
-            if (ball.IsBomb())
+            exchangeButton.interactable = false;
+            yield return new WaitForSeconds(5.0f);
+            exchangeButton.interactable = true;
+        }
+
+        private IEnumerator CoCountDown()
+        {
+            var restTime = 60;
+            while (restTime > 0)
             {
-                Bomb(ball);
+                yield return new WaitForSeconds(1);
+                restTime--;
+                restTextText.SetText(string.Format("{0}", restTime));
             }
-            else
+            OnGameOver();
+        }
+
+        private void AddScore(int point)
+        {
+            currentScore += point;
+            scoreText.SetText(string.Format("Score:{0}", currentScore));
+        }
+
+        private void OnDragBegin()
+        {
+            Vector2 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            var hit = Physics2D.Raycast(mousePosition, Vector2.zero);
+            if (hit && hit.collider.GetComponent<Ball>())
             {
+                var ball = hit.collider.GetComponent<Ball>();
+                if (ball.Id == -1)
+                {
+                    Bomb(ball);
+                    return;
+                }
                 AddRemoveBall(ball);
                 isDragging = true;
             }
         }
-    }
 
-    private void OnDragging()
-    {
-        Debug.Log("ドラッグ中");
-        Vector2 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        RaycastHit2D hit = Physics2D.Raycast(mousePosition, Vector2.zero);
-        if (hit && hit.collider.GetComponent<Ball>())
+        private void OnDragging()
         {
-            Ball ball = hit.collider.GetComponent<Ball>();
-
-            if (ball.id == currentDraggingBall.id)
+            Vector2 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            var hit = Physics2D.Raycast(mousePosition, Vector2.zero);
+            if (hit && hit.collider.GetComponent<Ball>())
             {
-                float distance = Vector2.Distance(ball.transform.position, currentDraggingBall.transform.position);
-                if (distance < 1.5)
+                var ball = hit.collider.GetComponent<Ball>();
+                if (ball.Id == currentDraggingBall.Id)
                 {
-                    AddRemoveBall(ball);
+                    var distance = Vector2.Distance(ball.transform.position, currentDraggingBall.transform.position);
+                    if (distance < 1.5)
+                    {
+                        AddRemoveBall(ball);
+                    }
                 }
             }
         }
-    }
 
-    private void OnDragEnd()
-    {
-        int removeCount = removeBalls.Count;
-
-        if (removeCount >= 3)
+        private void OnDragEnd()
         {
-            removeBalls.ForEach(x => x.OnDestory());
-            StartCoroutine(ballGenerator.CoCreateDropBalls(removeCount));
-            int score = removeCount * 100;
-            AddScore(score);
-            SpawnPointEffect(removeBalls.Last(x => x).transform.position, score);
-            removeBalls.ForEach(x => x.transform.DOScale(Vector3.one, 1.7f));
+            var removeCount = removeBallList.Count;
+            if (removeCount >= 3)
+            {
+                removeBallList.ForEach(x => x.OnDestroy());
+                StartCoroutine(ballGenerator.CoCreateDropBalls(removeCount, () => StartCoroutine(CoEnableInteractable())));
+                var score = removeCount * 100;
+                AddScore(score);
+                SpawnPointEffect(removeBallList.Last(x => x).transform.position, score);
+                removeBallList.ForEach(x => x.transform.DOScale(Vector3.one, 1.7f));
+            }
+            else
+            {
+                removeBallList.ForEach(x => x.transform.localScale = Vector3.one);
+            }
+            removeBallList.Clear();
+            isDragging = false;
         }
-        else
-        {
-            removeBalls.ForEach(x => x.transform.localScale = Vector3.one);
-        }
-        removeBalls.Clear();
-        isDragging = false;
-    }
 
-    private void AddRemoveBall(Ball ball)
-    {
-        currentDraggingBall = ball;
-        if (!removeBalls.Contains(ball))
+        private void AddRemoveBall(Ball ball)
         {
+            currentDraggingBall = ball;
+            if (removeBallList.Contains(ball)) return;
             ball.transform.DOScale(new Vector3(1.4f, 1.4f, 1.4f), 0.3f);
-            removeBalls.Add(ball);
+            removeBallList.Add(ball);
+
         }
-    }
 
-    private void Bomb(Ball bomb)
-    {
-        Collider2D[] hitObjArray = Physics2D.OverlapCircleAll(bomb.transform.position, 2);
-
-        Ball ball;
-        List<Ball> bombList = new List<Ball>();
-        hitObjArray.ToList().ForEach(
-            x =>
-            {
-                if (x.TryGetComponent(out ball)) bombList.Add(ball);
-            });
-        bombList.ForEach(
-            x =>
-            {
-                x.OnDestory();
-            });
-        int removeCount = bombList.Count;
-
-        StartCoroutine(ballGenerator.CoCreateDropBalls(removeCount));
-
-        int score = removeCount * 100;
-        AddScore(score);
-        SpawnPointEffect(bomb.transform.position, score);
-    }
-
-    private void SpawnPointEffect(Vector2 pos, int score)
-    {
-        GameObject effectObj = Instantiate(pointEffectPrefab, pos, Quaternion.identity);
-        PointEffect pointEffect = effectObj.GetComponent<PointEffect>();
-        pointEffect.Show(score);
-    }
-
-    private void GameOver()
-    {
-        isGameOver = true;
-
-        finishButton.SetActive(true);
-        gameOverText.SetActive(true);
-
-        gameObject.transform.DOScale(1.1f, 0.5f).SetLoops(-1, LoopType.Yoyo);
-
-        ExchangeButton.enabled = false;
-
-        var highScore = PlayerPrefs.GetInt("Score", 0);
-        highScoreText.text = string.Format("High Score:{0}", highScore);
-        if (highScore < currentScore)
+        private void Bomb(Ball bomb)
         {
-            PlayerPrefs.SetInt("Score", currentScore);
-            PlayerPrefs.Save();
+            var hitObjArray = Physics2D.OverlapCircleAll(bomb.transform.position, 2);
+            var bombList = new List<Ball>();
+            hitObjArray.Select(x => x.TryGetComponent(out Ball ball) ? ball : null).Where(x => x != null).ToList().ForEach(x => bombList.Add(x));
+            bombList.ForEach(x => x.OnDestroy());
+            var removeCount = bombList.Count;
+
+            StartCoroutine(ballGenerator.CoCreateDropBalls(removeCount, () => StartCoroutine(CoEnableInteractable())));
+
+            var score = removeCount * (bomb.Id == -1 ? 200 : 100);
+            AddScore(score);
+            SpawnPointEffect(bomb.transform.position, score);
         }
-    }
 
-    public void OnAllExchangeBalls()
-    {
-        GameObject[] balls = GameObject.FindGameObjectsWithTag("Respawn");
-        balls.ToList().ForEach(x => Destroy(x));
-        StartCoroutine(ballGenerator.CoCreateDropBalls(firstCreateBallNum));
-    }
+        private void SpawnPointEffect(Vector2 pos, int score)
+        {
+            var effectObj = Instantiate(pointEffectPrefab, pos, Quaternion.identity);
+            var pointEffect = effectObj.GetComponent<PointEffect>();
+            pointEffect.Show(score);
+        }
 
-    public void OnTapChangeScene()
-    {
-        SceneManager.LoadScene("Title");
+        private void OnGameOver()
+        {
+            isGameOver = true;
+
+            finishButton.SetActive(true);
+            gameOverRoot.SetActive(true);
+
+            gameObject.transform.DOScale(1.1f, 0.5f).SetLoops(-1, LoopType.Yoyo);
+
+            exchangeButton.enabled = false;
+
+            var highScore = PlayerPrefs.GetInt("Score", 0);
+            highScoreText.SetText(string.Format("High Score:{0}", highScore));
+            if (highScore < currentScore)
+            {
+                PlayerPrefs.SetInt("Score", currentScore);
+                PlayerPrefs.Save();
+            }
+        }
+
+        public void OnExchangeBallAll()
+        {
+            var balls = GameObject.FindGameObjectsWithTag("Respawn");
+            balls.ToList().ForEach(x => Destroy(x));
+            StartCoroutine(ballGenerator.CoCreateDropBalls(50, () => StartCoroutine(CoEnableInteractable())));
+        }
+
+        public void OnTapChangeScene()
+        {
+            SceneManager.LoadSceneAsync("Title");
+        }
     }
 }

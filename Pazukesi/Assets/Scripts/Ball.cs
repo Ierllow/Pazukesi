@@ -1,17 +1,14 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public class Ball : MonoBehaviour
+namespace Pazukesi.Game
 {
-    public int id;
-
-    private readonly int bombId = -1;
-
-    public void OnDestory()
+    public class Ball : MonoBehaviour
     {
-        Destroy(gameObject);
-    }
+        public int Id { get; set; }
 
-    public bool IsBomb() { return id == bombId; }
+        public void OnDestroy()
+        {
+            Destroy(gameObject);
+        }
+    }
 }
